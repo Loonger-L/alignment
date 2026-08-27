@@ -84,11 +84,11 @@ static inline double applyWeight(uint64_t kmer, const mm_idx_t *mi)
 	/*
 	 * Deterministic pseudo-random value in [0, 1).
 	 *
-	 * 0x1.0p-64 is exactly 2^-64.
+	 * ldexp(1.0, -64) is exactly 2^-64.
 	 * The result is stable across runs, threads, and reference/query passes.
 	 */
 	uint64_t hash = murmerhash64(kmer, UINT64_MAX);
-	double u = (double)hash * 0x1.0p-64;
+	double u = (double)hash * ldexp(1.0, -64);
 
 	/*
 	 * Frequency-group interval mapping:
