@@ -179,9 +179,7 @@ typedef struct {
 // index reader
 typedef struct {
 	int is_idx, n_parts;
-	int done;
 	int64_t idx_size;
-	char *fn;
 	mm_idxopt_t opt;
 	FILE *fp_out;
 	union {
