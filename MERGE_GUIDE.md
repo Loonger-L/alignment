@@ -40,7 +40,7 @@ Before merging, review the modifications to ensure they align with requirements 
    - Removed external meryl compilation commands (`+$(MAKE) -C ext/meryl/src`) and `BUILDSTACKTRACE=0` exports because exact k-mer counting is now performed internally from reference sequences.
 
 3. **`src/sketch.c` — C++11 Compatibility Fix**
-   - Replaced hexadecimal float literal `0x1.0p-64` (C++17 feature) with `ldexp(1.0, -64)` to adhere strictly to `-std=c++11`.
+   - Replaced hexadecimal float literal `0x1.0p-64` (not supported in C++11) with `ldexp(1.0, -64)` to adhere strictly to `-std=c++11`.
 
 ### Local Inspection & Build Testing
 To review and build the branch locally:
@@ -95,7 +95,7 @@ gh pr merge 1 --merge
 ---
 
 ## Summary Checklist for Merging Agent Work
-- [x] Agent completed task & created PR (#1)
-- [x] Code builds cleanly with `make -j8`
-- [x] PR converted from Draft to Ready for Review
-- [x] PR merged into `main` branch
+- [ ] Agent completed task & created PR (#1)
+- [ ] Code builds cleanly with `make -j8`
+- [ ] PR converted from Draft to Ready for Review
+- [ ] PR merged into `main` branch
