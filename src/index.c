@@ -315,6 +315,11 @@ static void mm_idx_add(mm_idx_t *mi, int n, const mm128_t *a)
 	}
 }
 
+/* Forward declarations for helpers defined later in this file. */
+static inline uint64_t mm_canonical_kmer(uint64_t forward, uint64_t reverse);
+static struct mm_kmer_weight_db_s *mm_kmer_weight_build_from_reference(const char *fn, int k, int is_hpc);
+static struct mm_kmer_weight_db_s *mm_kmer_weight_build_from_sequences(int n, const char **seq, int k, int is_hpc);
+
 static void mm_count_sequence_kmers(
 	const char *str,
 	int len,
