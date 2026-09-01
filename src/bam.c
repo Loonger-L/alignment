@@ -141,7 +141,7 @@ int mm_sam_to_bam(FILE *sam, const char *fn)
 	char *line = 0; size_t cap = 0; ssize_t n;
 	std::string hdr; std::vector<bam_ref_t> refs;
 	while ((n = getline(&line, &cap, sam)) >= 0) {
-		if (line[n-1] == '\n') line[--n] = 0;
+		if (n > 0 && line[n-1] == '\n') line[--n] = 0;
 		if (line[0] == '@') {
 			hdr += line; hdr += '\n';
 			if (strncmp(line, "@SQ\t", 4) == 0) {
