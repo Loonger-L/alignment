@@ -166,10 +166,14 @@ int mm_sam_to_bam(FILE *sam, const char *fn)
 	line = 0; cap = 0;
 	while ((n = getline(&line, &cap, sam)) >= 0) {
 		if (n > 0 && line[n-1] == '\n') line[n-1] = 0;
-		if (line[0] != '@' && append_record(bam, line, refs) < 0) { ret = -1; break; }
-		if (bam.size() >= 60000) {
-			if (bgzf_write(fp, bam.data(), 60000) < 0) { ret = -1; break; }
-			bam.erase(bam.begin(), bam.begin() + 60000);
+		if (line[0] != '@') {
+			std::vector<uint8_t> record;
+			if (append_record(record, line, refs) < 0) { ret = -1; break; }
+			if (!bam.empty() && bam.size() + record.size() > 60000) {
+				if (bgzf_write(fp, bam.data(), bam.size()) < 0) { ret = -1; break; }
+				bam.clear();
+			}
+			bam.insert(bam.end(), record.begin(), record.end());
 		}
 	}
 	free(line);

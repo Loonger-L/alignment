@@ -136,7 +136,7 @@ int main(int argc, char *argv[])
 	bool sam_header_written = false;
 	//by default, we set pthread count to half of hardware supported threads
 	char *fnw = 0, *rg = 0, *junc_bed = 0, *s, *output_fn = 0, *preset = 0;
-	FILE *bam_tmp = 0;
+	char bam_tmp[] = "/tmp/winnowmap-bam-XXXXXX";
 	FILE *fp_help = stderr;
 	mm_idx_reader_t *idx_rdr;
 	mm_idx_t *mi;
@@ -204,17 +204,12 @@ int main(int argc, char *argv[])
 					output_bam = true;
 					output_fn = o.arg;
 					opt.flag |= MM_F_OUT_SAM | MM_F_CIGAR;
-					bam_tmp = tmpfile();
-					fflush(stdout);
-					if (bam_tmp && dup2(fileno(bam_tmp), fileno(stdout)) == -1) {
-						fclose(bam_tmp);
-						bam_tmp = 0;
-					}
-					if (bam_tmp == 0) {
+					int fd = mkstemp(bam_tmp);
+					if (fd < 0 || close(fd) != 0 || freopen(bam_tmp, "wb", stdout) == NULL) {
 						fprintf(stderr, "[ERROR] failed to create temporary SAM output: %s\n", strerror(errno));
+						if (fd >= 0) unlink(bam_tmp);
 						return 1;
 					}
-					setvbuf(stdout, 0, _IONBF, 0);
 				} else if (freopen(o.arg, "wb", stdout) == NULL) {
 					fprintf(stderr, "[ERROR]\033[1;31m failed to write the output to file '%s'\033[0m: %s\n", o.arg, strerror(errno));
 					exit(1);
@@ -486,12 +481,20 @@ int main(int argc, char *argv[])
 		exit(EXIT_FAILURE);
 	}
 	if (output_bam) {
-		if (mm_sam_to_bam(bam_tmp, output_fn) < 0) {
-			fprintf(stderr, "[ERROR] failed to write BAM output '%s': %s\n", output_fn, strerror(errno));
-			fclose(bam_tmp);
+		if (fclose(stdout) != 0) {
+			perror("[ERROR] failed to close temporary SAM output");
+			unlink(bam_tmp);
 			return 1;
 		}
-		fclose(bam_tmp);
+		FILE *sam = fopen(bam_tmp, "rb");
+		if (sam == 0 || mm_sam_to_bam(sam, output_fn) < 0) {
+			fprintf(stderr, "[ERROR] failed to write BAM output '%s': %s\n", output_fn, strerror(errno));
+			if (sam) fclose(sam);
+			unlink(bam_tmp);
+			return 1;
+		}
+		fclose(sam);
+		unlink(bam_tmp);
 	}
 
 	if (mm_verbose >= 3) {
