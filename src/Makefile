@@ -1,5 +1,5 @@
 INCLUDES=
-OBJS=		kthread.o kalloc.o misc.o bseq.o sketch.o sdust.o options.o index.o chain.o align.o hit.o map.o format.o pe.o esterr.o splitidx.o ksw2_ll_sse.o
+OBJS=		kthread.o kalloc.o misc.o bseq.o sketch.o sdust.o options.o index.o chain.o align.o hit.o map.o format.o bam.o pe.o esterr.o splitidx.o ksw2_ll_sse.o
 PROG=		winnowmap
 
 ifeq ($(arm_neon),) # if arm_neon is not defined

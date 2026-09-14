@@ -132,8 +132,11 @@ int main(int argc, char *argv[])
 	mm_idxopt_t ipt;
 	int i, c, n_threads = std::max(3, get_cpu_count()/OMP_PER_READ_THREADS), n_parts, old_best_n = -1;
 	bool n_threads_override = false;
+	bool output_bam = false;
+	bool sam_header_written = false;
 	//by default, we set pthread count to half of hardware supported threads
-	char *fnw = 0, *rg = 0, *junc_bed = 0, *s;
+	char *fnw = 0, *rg = 0, *junc_bed = 0, *s, *output_fn = 0, *preset = 0;
+	char bam_tmp[] = "/tmp/winnowmap-bam-XXXXXX";
 	FILE *fp_help = stderr;
 	mm_idx_reader_t *idx_rdr;
 	mm_idx_t *mi;
@@ -145,6 +148,7 @@ int main(int argc, char *argv[])
 
 	while ((c = ketopt(&o, argc, argv, 1, opt_str, long_options)) >= 0) { // test command line options and apply option -x/preset first
 		if (c == 'x') {
+			preset = o.arg;
 			if (mm_set_opt(o.arg, &ipt, &opt) < 0) {
 				fprintf(stderr, "[ERROR] unknown preset '%s'\n", o.arg);
 				return 1;
@@ -195,10 +199,23 @@ int main(int argc, char *argv[])
 		else if (c == '2') opt.flag |= MM_F_2_IO_THREADS;
 		else if (c == 'o') {
 			if (strcmp(o.arg, "-") != 0) {
-				if (freopen(o.arg, "wb", stdout) == NULL) {
+				size_t l = strlen(o.arg);
+				if (l >= 4 && strcmp(o.arg + l - 4, ".bam") == 0) {
+					output_bam = true;
+					output_fn = o.arg;
+					opt.flag |= MM_F_OUT_SAM | MM_F_CIGAR;
+					int fd = mkstemp(bam_tmp);
+					if (fd < 0 || close(fd) != 0 || freopen(bam_tmp, "wb", stdout) == NULL) {
+						fprintf(stderr, "[ERROR] failed to create temporary SAM output: %s\n", strerror(errno));
+						if (fd >= 0) unlink(bam_tmp);
+						return 1;
+					}
+				} else if (freopen(o.arg, "wb", stdout) == NULL) {
 					fprintf(stderr, "[ERROR]\033[1;31m failed to write the output to file '%s'\033[0m: %s\n", o.arg, strerror(errno));
 					exit(1);
 				}
+				else if (l >= 4 && strcmp(o.arg + l - 4, ".sam") == 0)
+					opt.flag |= MM_F_OUT_SAM | MM_F_CIGAR;
 			}
 		}
 		else if (c == 300) ipt.bucket_bits = atoi(o.arg); // --bucket-bits
@@ -293,6 +310,14 @@ int main(int argc, char *argv[])
 			opt.e = opt.e2 = strtol(o.arg, &s, 10);
 			if (*s == ',') opt.e2 = strtol(s + 1, &s, 10);
 		}
+	}
+	if (preset && ((strncmp(preset, "asm", 3) == 0 && ipt.k != 19) ||
+		((strcmp(preset, "map-ont") == 0 || strcmp(preset, "map-pb") == 0 ||
+		  strcmp(preset, "map-pb-clr") == 0 || strcmp(preset, "splice") == 0 ||
+		  strcmp(preset, "splice:hq") == 0 || strcmp(preset, "cdna") == 0) && ipt.k != 15))) {
+		fprintf(stderr, "[ERROR] preset '%s' requires k=%d, but -k%d was specified.\n",
+			preset, strncmp(preset, "asm", 3) == 0? 19 : 15, ipt.k);
+		return 1;
 	}
     /*
      * The graded weighting database is computed globally over the complete
@@ -416,14 +441,9 @@ int main(int argc, char *argv[])
 			mm_idx_reader_close(idx_rdr);
 			return 1;
 		}
-		if ((opt.flag & MM_F_OUT_SAM) && idx_rdr->n_parts == 1) {
-			if (mm_idx_reader_eof(idx_rdr)) {
-				mm_write_sam_hdr(mi, rg, MM_VERSION, argc, argv);
-			} else {
-				mm_write_sam_hdr(0, rg, MM_VERSION, argc, argv);
-				if (opt.split_prefix == 0 && mm_verbose >= 2)
-					fprintf(stderr, "[WARNING]\033[1;31m For a multi-part index, no @SQ lines will be outputted. Please use --split-prefix.\033[0m\n");
-			}
+		if ((opt.flag & MM_F_OUT_SAM) && !sam_header_written) {
+			mm_write_sam_hdr(mi, rg, MM_VERSION, argc, argv);
+			sam_header_written = true;
 		}
 		if (mm_verbose >= 3)
 			fprintf(stderr, "[M::%s::%.3f*%.2f] loaded/built the index for %d target sequence(s)\n",
@@ -459,6 +479,22 @@ int main(int argc, char *argv[])
 	if (fflush(stdout) == EOF) {
 		perror("[ERROR] failed to write the results");
 		exit(EXIT_FAILURE);
+	}
+	if (output_bam) {
+		if (fclose(stdout) != 0) {
+			perror("[ERROR] failed to close temporary SAM output");
+			unlink(bam_tmp);
+			return 1;
+		}
+		FILE *sam = fopen(bam_tmp, "rb");
+		if (sam == 0 || mm_sam_to_bam(sam, output_fn) < 0) {
+			fprintf(stderr, "[ERROR] failed to write BAM output '%s': %s\n", output_fn, strerror(errno));
+			if (sam) fclose(sam);
+			unlink(bam_tmp);
+			return 1;
+		}
+		fclose(sam);
+		unlink(bam_tmp);
 	}
 
 	if (mm_verbose >= 3) {
